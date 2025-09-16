@@ -1160,6 +1160,8 @@
                 constructor() {
                     super();
                     this.synth = new ResonantBodiesSynth(sampleRate);
+                    this.sampleCount = 0;
+                    this.samplesUntilReport = 4096;
 
                     this.port.onmessage = (e) => {
                         const { type, data } = e.data;
@@ -1203,9 +1205,10 @@
 
                 process(inputs, outputs, parameters) {
                     const output = outputs[0];
+                    let bufferSize = 0;
 
                     if (output.length > 0) {
-                        const bufferSize = output[0].length;
+                        bufferSize = output[0].length;
                         const interleavedBuffer = new Float32Array(bufferSize * 2);
 
                         this.synth.process(interleavedBuffer, bufferSize);
@@ -1221,6 +1224,40 @@
                             const energies = this.synth.resonators.map(r => r.energy);
                             this.port.postMessage({ type: MSG.ENERGY, data: energies });
                         }
+                    }
+
+                    if (bufferSize > 0) {
+                        // --- Start of New Data Reporting Code ---
+                        this.sampleCount += bufferSize;
+
+                        if (this.sampleCount >= this.samplesUntilReport) {
+                            this.sampleCount -= this.samplesUntilReport;
+
+                            let peakAmplitude = 0;
+                            for (let i = 0; i < bufferSize; i++) {
+                                const absSample = Math.abs(output[0][i]);
+                                if (absSample > peakAmplitude) {
+                                    peakAmplitude = absSample;
+                                }
+                            }
+
+                            const resonatorData = this.synth.resonators.map(r => {
+                                return {
+                                    id: r.id,
+                                    energy: r.energy,
+                                    frequency: sampleRate / r.forwardDelay.delaySamples
+                                };
+                            });
+
+                            this.port.postMessage({
+                                type: 'analysisData',
+                                data: {
+                                    peakAmplitude: peakAmplitude,
+                                    resonators: resonatorData
+                                }
+                            });
+                        }
+                        // --- End of New Data Reporting Code ---
                     }
 
                     return true;
@@ -1271,6 +1308,13 @@
                             ).textContent = e.data.data.toFixed(2);
                             document.getElementById("coupling").value =
                                 e.data.data * 100;
+                        } else if (e.data.type === 'analysisData') {
+                            const data = e.data.data;
+
+                            console.log(
+                                `Peak Amplitude: ${data.peakAmplitude.toFixed(4)}`,
+                            );
+                            console.table(data.resonators);
                         }
                     });
                 } catch (error) {
