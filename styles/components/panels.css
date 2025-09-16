@@ -1,0 +1,19 @@
+.panel {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 15px;
+    padding: 20px;
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.panel h3 {
+    color: #00d4aa;
+    margin-bottom: 15px;
+}
+
+.info-text {
+    text-align: center;
+    color: rgba(255, 255, 255, 0.6);
+    margin-top: 10px;
+    font-size: 0.9em;
+}
