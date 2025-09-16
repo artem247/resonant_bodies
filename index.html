@@ -676,8 +676,8 @@
                     const backwardWave =
                         -forward * dampingFactor * this.stiffness;
 
-                    this.forwardDelay.write(forwardWave);
-                    this.backwardDelay.write(backwardWave);
+                    this.forwardDelay.write(Math.tanh(forwardWave));
+                    this.backwardDelay.write(Math.tanh(backwardWave));
 
                     this.excitationBuffer = 0;
 
@@ -728,7 +728,7 @@
                     // Wave speed = sqrt(tension / linear_density)
                     const linearDensity = density * length;
                     const waveSpeed = Math.sqrt(tension / linearDensity);
-                    const frequency = waveSpeed / (2 * length);
+                    const frequency = (waveSpeed / (2 * length)) * 8;
 
                     const delaySamples = Math.floor(
                         this.sampleRate / frequency,
@@ -1145,127 +1145,132 @@
 
             // Audio processor worklet code (compact version of classes)
             const processorCode = `
-            const MSG = ${JSON.stringify(MSG)};
-            const BASE_SAMPLE_RATE = ${BASE_SAMPLE_RATE};
-            const MAX_RESONATORS = ${MAX_RESONATORS};
+                const MSG = ${JSON.stringify(MSG)};
+                const BASE_SAMPLE_RATE = ${BASE_SAMPLE_RATE};
+                const MAX_RESONATORS = ${MAX_RESONATORS};
 
-            ${DelayLine.toString()}
-            ${OnePoleFilter.toString()}
-            ${Resonator.toString()}
-            ${CouplingNetwork.toString()}
-            ${SpatialProcessor.toString()}
-            ${ResonantBodiesSynth.toString()}
+                let   MAX_DELAY_SAMPLES           = 4800;
+                let   RESONATOR_ENERGY_SMOOTHING  = 0.001;
+                let   COUPLING_ENERGY_SMOOTHING   = 0.05;
+                const DAMPING_SMOOTHING           = 0.95;
 
-            class ResonantBodiesProcessor extends AudioWorkletProcessor {
-                constructor() {
-                    super();
-                    this.synth = new ResonantBodiesSynth(sampleRate);
-                    this.sampleCount = 0;
-                    this.samplesUntilReport = 4096;
+                ${DelayLine.toString()}
+                ${OnePoleFilter.toString()}
+                ${Resonator.toString()}
+                ${CouplingNetwork.toString()}
+                ${SpatialProcessor.toString()}
+                ${ResonantBodiesSynth.toString()}
 
-                    this.port.onmessage = (e) => {
-                        const { type, data } = e.data;
+                class ResonantBodiesProcessor extends AudioWorkletProcessor {
+                    constructor() {
+                        super();
+                        this.synth = new ResonantBodiesSynth(sampleRate);
+                        this.sampleCount = 0;
+                        this.samplesUntilReport = 4096;
 
-                        switch(type) {
-                            case MSG.EXCITE:
-                                this.synth.exciteResonator(data.index, data.excitationType, data.params);
-                                break;
-                            case MSG.UPDATE_MATERIAL:
-                                this.synth.updateMaterialPosition(data.x, data.y, data.z);
-                                break;
-                            case MSG.SET_TOPOLOGY:
-                                const newStrength = this.synth.setTopology(data.topology);
-                                this.port.postMessage({ type: MSG.COUPLING_UPDATE, data: newStrength });
-                                break;
-                            case MSG.SET_COUPLING:
-                                this.synth.couplingNetwork.couplingStrength = data.value;
-                                break;
-                            case MSG.SET_DAMPING:
-                                for (let res of this.synth.resonators) {
-                                    res.baseDamping = data.value;
-                                }
-                                break;
-                            case MSG.SET_STIFFNESS:
-                                for (let res of this.synth.resonators) {
-                                    res.stiffness = data.value;
-                                }
-                                break;
-                            case MSG.SET_TENSION:
-                                this.synth.tensionField = data.value;
-                                break;
-                            case MSG.RESET:
-                                this.synth.reset();
-                                break;
-                            case MSG.CLOSE:
-                                this.synth.close();
-                                break;
-                        }
-                    };
-                }
+                        this.port.onmessage = (e) => {
+                            const { type, data } = e.data;
 
-                process(inputs, outputs, parameters) {
-                    const output = outputs[0];
-                    let bufferSize = 0;
-
-                    if (output.length > 0) {
-                        bufferSize = output[0].length;
-                        const interleavedBuffer = new Float32Array(bufferSize * 2);
-
-                        this.synth.process(interleavedBuffer, bufferSize);
-
-                        // De-interleave
-                        for (let i = 0; i < bufferSize; i++) {
-                            output[0][i] = interleavedBuffer[i * 2];
-                            output[1][i] = interleavedBuffer[i * 2 + 1];
-                        }
-
-                        // Send energy data back to main thread (throttled)
-                        if (Math.random() < 0.1) {
-                            const energies = this.synth.resonators.map(r => r.energy);
-                            this.port.postMessage({ type: MSG.ENERGY, data: energies });
-                        }
+                            switch(type) {
+                                case MSG.EXCITE:
+                                    this.synth.exciteResonator(data.index, data.excitationType, data.params);
+                                    break;
+                                case MSG.UPDATE_MATERIAL:
+                                    this.synth.updateMaterialPosition(data.x, data.y, data.z);
+                                    break;
+                                case MSG.SET_TOPOLOGY:
+                                    const newStrength = this.synth.setTopology(data.topology);
+                                    this.port.postMessage({ type: MSG.COUPLING_UPDATE, data: newStrength });
+                                    break;
+                                case MSG.SET_COUPLING:
+                                    this.synth.couplingNetwork.couplingStrength = data.value;
+                                    break;
+                                case MSG.SET_DAMPING:
+                                    for (let res of this.synth.resonators) {
+                                        res.baseDamping = data.value;
+                                    }
+                                    break;
+                                case MSG.SET_STIFFNESS:
+                                    for (let res of this.synth.resonators) {
+                                        res.stiffness = data.value;
+                                    }
+                                    break;
+                                case MSG.SET_TENSION:
+                                    this.synth.tensionField = data.value;
+                                    break;
+                                case MSG.RESET:
+                                    this.synth.reset();
+                                    break;
+                                case MSG.CLOSE:
+                                    this.synth.close();
+                                    break;
+                            }
+                        };
                     }
 
-                    if (bufferSize > 0) {
-                        // --- Start of New Data Reporting Code ---
-                        this.sampleCount += bufferSize;
+                    process(inputs, outputs, parameters) {
+                        const output = outputs[0];
+                        let bufferSize = 0;
 
-                        if (this.sampleCount >= this.samplesUntilReport) {
-                            this.sampleCount -= this.samplesUntilReport;
+                        if (output.length > 0) {
+                            bufferSize = output[0].length;
+                            const interleavedBuffer = new Float32Array(bufferSize * 2);
 
-                            let peakAmplitude = 0;
+                            this.synth.process(interleavedBuffer, bufferSize);
+
+                            // De-interleave
                             for (let i = 0; i < bufferSize; i++) {
-                                const absSample = Math.abs(output[0][i]);
-                                if (absSample > peakAmplitude) {
-                                    peakAmplitude = absSample;
-                                }
+                                output[0][i] = interleavedBuffer[i * 2];
+                                output[1][i] = interleavedBuffer[i * 2 + 1];
                             }
 
-                            const resonatorData = this.synth.resonators.map(r => {
-                                return {
-                                    id: r.id,
-                                    energy: r.energy,
-                                    frequency: sampleRate / r.forwardDelay.delaySamples
-                                };
-                            });
-
-                            this.port.postMessage({
-                                type: 'analysisData',
-                                data: {
-                                    peakAmplitude: peakAmplitude,
-                                    resonators: resonatorData
-                                }
-                            });
+                            // Send energy data back to main thread (throttled)
+                            if (Math.random() < 0.1) {
+                                const energies = this.synth.resonators.map(r => r.energy);
+                                this.port.postMessage({ type: MSG.ENERGY, data: energies });
+                            }
                         }
-                        // --- End of New Data Reporting Code ---
+
+                        if (bufferSize > 0) {
+                            // --- Start of New Data Reporting Code ---
+                            this.sampleCount += bufferSize;
+
+                            if (this.sampleCount >= this.samplesUntilReport) {
+                                this.sampleCount -= this.samplesUntilReport;
+
+                                let peakAmplitude = 0;
+                                for (let i = 0; i < bufferSize; i++) {
+                                    const absSample = Math.abs(output[0][i]);
+                                    if (absSample > peakAmplitude) {
+                                        peakAmplitude = absSample;
+                                    }
+                                }
+
+                                const resonatorData = this.synth.resonators.map(r => {
+                                    return {
+                                        id: r.id,
+                                        energy: r.energy,
+                                        frequency: sampleRate / r.forwardDelay.delaySamples
+                                    };
+                                });
+
+                                this.port.postMessage({
+                                    type: 'analysisData',
+                                    data: {
+                                        peakAmplitude: peakAmplitude,
+                                        resonators: resonatorData
+                                    }
+                                });
+                            }
+                            // --- End of New Data Reporting Code ---
+                        }
+
+                        return true;
                     }
-
-                    return true;
                 }
-            }
 
-            registerProcessor('resonant-bodies-processor', ResonantBodiesProcessor);
-        `;
+                registerProcessor('resonant-bodies-processor', ResonantBodiesProcessor);
+            `;
 
             let processorNode = null;
             let synthBridge = null;
@@ -1293,6 +1298,11 @@
                     processorNode = new AudioWorkletNode(
                         audioContext,
                         "resonant-bodies-processor",
+                        {
+                            outputChannelCount: [2], // stereo
+                            numberOfInputs: 0,
+                            numberOfOutputs: 1,
+                        },
                     );
                     processorNode.connect(masterGain);
 
@@ -1308,7 +1318,7 @@
                             ).textContent = e.data.data.toFixed(2);
                             document.getElementById("coupling").value =
                                 e.data.data * 100;
-                        } else if (e.data.type === 'analysisData') {
+                        } else if (e.data.type === "analysisData") {
                             const data = e.data.data;
 
                             console.log(
