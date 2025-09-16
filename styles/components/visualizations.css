@@ -1,0 +1,71 @@
+.visualization {
+    position: relative;
+    height: 400px;
+    background: radial-gradient(
+        circle at center,
+        rgba(0, 212, 170, 0.05),
+        transparent
+    );
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+canvas {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+
+.spectrum-display {
+    height: 100px;
+    background: linear-gradient(
+        180deg,
+        transparent,
+        rgba(0, 212, 170, 0.05)
+    );
+    border-radius: 10px;
+    position: relative;
+    overflow: hidden;
+    margin-top: 15px;
+}
+
+.material-space {
+    position: relative;
+    height: 200px;
+    background: radial-gradient(
+        ellipse at center,
+        rgba(0, 153, 255, 0.1),
+        transparent
+    );
+    border-radius: 10px;
+    margin-top: 15px;
+    cursor: crosshair;
+}
+
+#materialIndicator {
+    position: absolute;
+    width: 20px;
+    height: 20px;
+    background: radial-gradient(circle, #fff, #00d4aa);
+    border-radius: 50%;
+    box-shadow: 0 0 20px rgba(0, 212, 170, 0.8);
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+}
+
+@keyframes pulse {
+    0% {
+        transform: scale(1);
+    }
+    50% {
+        transform: scale(1.05);
+    }
+    100% {
+        transform: scale(1);
+    }
+}
+
+.material-space.is-disabled {
+    opacity: 0.4;
+    pointer-events: none;
+}

@@ -1,0 +1,15 @@
+{
+  "name": "resonant-bodies",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build": "webpack --mode=production",
+    "start": "webpack serve --open --mode=development"
+  },
+  "devDependencies": {
+    "webpack": "^5.89.0",
+    "webpack-cli": "^5.1.4",
+    "webpack-dev-server": "^4.15.1",
+    "worker-loader": "^3.0.8"
+  }
+}
