@@ -1,11 +1,11 @@
 :root {
-    --color-background-start: #0a0e27;
-    --color-background-end: #1a1f3a;
-    --color-primary: #00d4aa;
-    --color-secondary: #0099ff;
+    --color-background-start: oklch(0.1768 0.0512 273.2);
+    --color-background-end: oklch(0.2494 0.0516 274.14);
+    --color-primary: oklch(0.6585 0.2886 4.1);
+    --color-secondary: oklch(0.669 0.18368 248.8066);
     --color-surface: rgba(255, 255, 255, 0.05);
     --color-surface-border: rgba(255, 255, 255, 0.1);
-    --color-text: #e0e0e0;
+    --color-text: oklch(0.9067 0 0);
 }
 
 body {
